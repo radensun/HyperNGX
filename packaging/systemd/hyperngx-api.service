@@ -1,0 +1,46 @@
+[Unit]
+Description=HyperNGX admin API & UI (unprivileged)
+After=hyperngx-supervisor.service postgresql.service
+Requires=hyperngx-supervisor.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=hyperngx-api
+Group=hyperngx-api
+ExecStart=/usr/bin/hyperngx-api --config /etc/hyperngx/api.toml
+Restart=always
+RestartSec=2s
+
+# Proses ini menghadap admin: tidak boleh punya kapabilitas apa pun.
+# Semua operasi berbahaya dilewatkan ke supervisor via unix socket.
+CapabilityBoundingSet=
+AmbientCapabilities=
+NoNewPrivileges=yes
+# Catatan: PrivateUsers memakai user namespace. Bila autentikasi `peer`
+# PostgreSQL ditolak setelah aktivasi, matikan baris ini (atau pindah ke
+# autentikasi scram-sha-256) — jangan menambal dengan menaikkan privilege.
+PrivateUsers=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @debug @mount
+IPAddressAllow=any
+
+LimitNOFILE=65535
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

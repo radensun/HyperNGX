@@ -1,0 +1,99 @@
+# ---------------------------------------------------------------
+# HyperNGX proxy host #{{ host.id }} - {{ host.domains | join(', ') }}
+# generation {{ generation_id }}
+# ---------------------------------------------------------------
+upstream hngx_up_{{ host.id }} {
+{%- if host.load_balance == "least_conn" %}
+    least_conn;
+{%- elif host.load_balance == "ip_hash" %}
+    ip_hash;
+{%- endif %}
+{%- for t in host.targets %}
+    server {{ t.address }}:{{ t.port }} weight={{ t.weight }} max_fails={{ t.max_fails }} fail_timeout={{ t.fail_timeout }}s{% if t.backup %} backup{% endif %};
+{%- endfor %}
+    keepalive 128;              # pool koneksi persisten ke upstream
+    keepalive_timeout 60s;
+    keepalive_requests 1000;
+}
+
+{% if host.force_ssl %}
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ host.domains | join(' ') }};
+    include /etc/hyperngx/nginx/snippets/acme-challenge.conf;
+    location / { return 308 https://$host$request_uri; }
+}
+{% endif %}
+
+server {
+{%- if host.ssl_enabled %}
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 {{ "on" if host.http2 else "off" }};
+  {%- if host.http3 %}
+    listen 443 quic;
+    listen [::]:443 quic;
+    add_header Alt-Svc 'h3=":443"; ma=86400' always;
+  {%- endif %}
+    ssl_certificate     /etc/hyperngx/tls/live/{{ host.cert_slug }}/fullchain.pem;
+    ssl_certificate_key /etc/hyperngx/tls/live/{{ host.cert_slug }}/privkey.pem;
+{%- else %}
+    listen 80;
+    listen [::]:80;
+{%- endif %}
+
+    server_name {{ host.domains | join(' ') }};
+
+    # Kuota per host agar satu tenant tidak menghabiskan worker.
+    limit_conn perserver {{ host.max_conn | default(4000) }};
+    client_max_body_size {{ host.client_max_body_size }};
+
+    include /etc/hyperngx/nginx/snippets/security-headers.conf;
+{%- if host.hardening %}
+    include /etc/hyperngx/nginx/snippets/hardening.conf;
+{%- endif %}
+{%- if host.hsts_disabled %}
+    more_clear_headers 'Strict-Transport-Security';
+{%- endif %}
+    include /etc/hyperngx/nginx/snippets/acme-challenge.conf;
+
+{%- if host.access_list_id %}
+    include /etc/hyperngx/nginx/access/list-{{ host.access_list_id }}.conf;
+{%- endif %}
+
+{%- if host.block_common_exploits %}
+    # Pola serangan umum (SQLi/LFI/RFI probing) ditolak lebih awal.
+    if ($query_string ~* "(\.\./|union.*select|base64_(en|de)code|<script)") { return 403; }
+{%- endif %}
+
+{%- for loc in host.locations %}
+
+    location {{ loc.path }} {
+        include /etc/hyperngx/nginx/snippets/proxy-params.conf;
+        proxy_pass {{ loc.scheme }}://{{ loc.upstream }};
+  {%- if loc.websocket %}
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+  {%- endif %}
+  {%- if loc.cache_enabled %}
+        proxy_cache hngx_cache;
+        proxy_cache_key "$scheme$request_method$host$request_uri";
+        proxy_cache_valid 200 301 302 {{ loc.cache_ttl }};
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_background_update on;
+        proxy_cache_lock on;
+        proxy_cache_bypass $is_write_method $http_authorization;
+        add_header X-Cache-Status $upstream_cache_status always;
+  {%- endif %}
+  {{ loc.extra_directives | indent(8) }}
+    }
+{%- endfor %}
+
+    location / {
+        include /etc/hyperngx/nginx/snippets/proxy-params.conf;
+        proxy_pass {{ host.scheme }}://hngx_up_{{ host.id }};
+    }
+
+{{ host.advanced_config | indent(4) }}
+}

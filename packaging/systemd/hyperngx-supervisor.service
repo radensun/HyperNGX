@@ -1,0 +1,44 @@
+[Unit]
+Description=HyperNGX supervisor (control plane, privileged)
+Documentation=https://github.com/hyperngx/hyperngx
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/hyperngx-supervisor --config /etc/hyperngx/supervisor.toml
+Restart=always
+RestartSec=2s
+TimeoutStopSec=30s
+
+# Supervisor perlu root untuk: bind port <1024 (dititipkan ke nginx),
+# menulis private key 0600, dan reload nginx. Kapabilitas dipangkas
+# seminimal mungkin.
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_CHOWN CAP_DAC_OVERRIDE CAP_SETUID CAP_SETGID CAP_KILL
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @raw-io @reboot @swap
+ReadWritePaths=/etc/hyperngx /var/lib/hyperngx /var/log/hyperngx /var/cache/hyperngx /run/hyperngx
+
+LimitNOFILE=200000
+LimitNPROC=16384
+OOMScoreAdjust=-500
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+# HyperNGX stream (L4) #{{ stream.id }} - {{ stream.name }}
+upstream hngx_stream_{{ stream.id }} {
+{%- for t in stream.targets %}
+    server {{ t.address }}:{{ t.port }} max_fails=3 fail_timeout=10s;
+{%- endfor %}
+}
+
+server {
+    listen {{ stream.listen_port }}{% if stream.udp %} udp{% endif %} reuseport backlog=65535;
+{%- if stream.tls_terminate %}
+    ssl_certificate     /etc/hyperngx/tls/live/{{ stream.cert_slug }}/fullchain.pem;
+    ssl_certificate_key /etc/hyperngx/tls/live/{{ stream.cert_slug }}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+{%- endif %}
+    proxy_pass hngx_stream_{{ stream.id }};
+    proxy_timeout {{ stream.timeout | default('10m') }};
+    proxy_connect_timeout 5s;
+    limit_conn stream_perip {{ stream.max_conn_per_ip | default(50) }};
+{%- if stream.proxy_protocol %}
+    proxy_protocol on;
+{%- endif %}
+}

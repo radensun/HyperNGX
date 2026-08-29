@@ -1,0 +1,52 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/hyperngx-core",
+  "crates/hyperngx-acme",
+  "crates/hyperngx-supervisor",
+  "crates/hyperngx-api",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "AGPL-3.0-or-later"
+
+[workspace.dependencies]
+tokio       = { version = "1", features = ["full"] }
+axum        = { version = "0.8", features = ["macros", "http2"] }
+tower       = "0.5"
+tower-http  = { version = "0.6", features = ["compression-br", "set-header", "trace", "limit"] }
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+sqlx        = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "migrate", "chrono", "uuid", "json", "ipnetwork"] }
+minijinja   = { version = "2", features = ["loader"] }
+instant-acme = "0.7"
+rcgen       = "0.13"
+argon2      = "0.5"
+rand        = "0.8"
+chrono      = { version = "0.4", features = ["serde"] }
+uuid        = { version = "1", features = ["v4", "v7", "serde"] }
+thiserror   = "2"
+anyhow      = "1"
+tracing     = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+idna        = "1"
+toml        = "0.8"
+ulid        = "1"
+nix         = { version = "0.29", features = ["user", "socket", "fs"] }
+base64      = "0.22"
+hex         = "0.4"
+sha2        = "0.10"
+reqwest     = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+http-body-util = "0.1"
+tower_governor = "0.4"
+totp-rs     = { version = "5", features = ["gen_secret"] }
+
+[profile.release]
+opt-level     = 3
+lto           = "fat"
+codegen-units = 1
+panic         = "abort"
+strip         = true

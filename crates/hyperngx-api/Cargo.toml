@@ -1,0 +1,27 @@
+[package]
+name = "hyperngx-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+hyperngx-core = { path = "../hyperngx-core" }
+hyperngx-acme = { path = "../hyperngx-acme" }
+tokio.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+argon2.workspace = true
+rand.workspace = true
+sha2.workspace = true
+hex.workspace = true
+base64.workspace = true
+totp-rs.workspace = true
+ulid.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

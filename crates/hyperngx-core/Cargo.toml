@@ -1,0 +1,14 @@
+[package]
+name = "hyperngx-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+minijinja.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+idna.workspace = true
+uuid.workspace = true

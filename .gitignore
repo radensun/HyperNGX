@@ -1,0 +1,15 @@
+# Rust
+target/
+
+# Node / SvelteKit
+web/node_modules/
+web/.svelte-kit/
+web/build/
+
+# Rahasia dan artefak lokal — jangan pernah masuk repo
+.env
+*.pem
+*.key
+*.dump
+*.sql.gz
+secrets/

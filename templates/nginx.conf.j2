@@ -1,0 +1,190 @@
+# =====================================================================
+# HyperNGX - nginx.conf (di-generate otomatis, JANGAN diedit manual)
+# Generation : {{ generation_id }}
+# Dibuat     : {{ generated_at }}
+# Target     : 10.000 concurrent connection / server (Debian 13)
+# =====================================================================
+
+user                 hyperngx;
+worker_processes     auto;
+worker_cpu_affinity  auto;
+pid                  /run/hyperngx/nginx.pid;
+
+# 10.000 client => ~20.000 socket (client + upstream) + file cache + log.
+# Diberi kepala 10x untuk burst dan keep-alive pool.
+worker_rlimit_nofile 200000;
+worker_shutdown_timeout 30s;
+
+# Timer resolution: menekan syscall gettimeofday pada QPS tinggi.
+timer_resolution     100ms;
+
+load_module modules/ngx_http_brotli_filter_module.so;
+load_module modules/ngx_http_brotli_static_module.so;
+load_module modules/ngx_http_headers_more_filter_module.so;
+{#- Hook WAF disiapkan tapi modulnya belum dibangun di v1. Mengaktifkan
+    flag ini tanpa mengompilasi ModSecurity akan membuat nginx -t gagal —
+    itu disengaja, agar kegagalannya terjadi saat uji, bukan saat reload. -#}
+{% if modsecurity_enabled %}load_module modules/ngx_http_modsecurity_module.so;{% endif %}
+
+events {
+    use                 epoll;
+    worker_connections  {{ worker_connections | default(16384) }};
+    multi_accept        on;
+    accept_mutex        off;   # reuseport dipakai, mutex tidak diperlukan
+}
+
+http {
+    ##
+    ## --- Dasar & MIME ---
+    ##
+    include              /etc/hyperngx/nginx/mime.types;
+    default_type         application/octet-stream;
+    charset              utf-8;
+
+    ##
+    ## --- Identitas server: sembunyikan versi & banner ---
+    ##
+    server_tokens        off;
+    more_clear_headers   'Server';
+    more_set_headers     'Server: hyperngx';
+
+    ##
+    ## --- I/O & throughput ---
+    ##
+    sendfile             on;
+    sendfile_max_chunk   2m;      # cegah worker "lengket" pada file besar
+    tcp_nopush           on;
+    tcp_nodelay          on;
+    aio                  threads;
+    directio             16m;
+
+    open_file_cache          max=200000 inactive=30s;
+    open_file_cache_valid    60s;
+    open_file_cache_min_uses 2;
+    open_file_cache_errors   on;
+
+    ##
+    ## --- Keep-alive (kunci untuk 10k concurrent) ---
+    ##
+    keepalive_timeout    65s;
+    keepalive_requests   1000;
+    reset_timedout_connection on;
+
+    ##
+    ## --- Anti Slowloris / resource exhaustion ---
+    ##
+    client_header_timeout   10s;
+    client_body_timeout     15s;
+    send_timeout            20s;
+    client_header_buffer_size    4k;
+    large_client_header_buffers  4 16k;
+    client_body_buffer_size      128k;
+    client_max_body_size    {{ client_max_body_size | default('64m') }};
+    client_body_temp_path   /var/lib/hyperngx/tmp/body 1 2;
+
+    ##
+    ## --- Zona shared memory (limit & cache) ---
+    ## 1 MB ~= 16.000 state alamat IPv4.
+    ##
+    limit_conn_zone   $binary_remote_addr zone=perip:20m;
+    limit_conn_zone   $server_name        zone=perserver:20m;
+    limit_req_zone    $binary_remote_addr zone=req_general:20m rate={{ rate_general | default(60) }}r/s;
+    limit_req_zone    $binary_remote_addr zone=req_login:10m   rate=5r/m;
+    limit_req_status  429;
+    limit_conn_status 429;
+
+    proxy_cache_path  /var/cache/hyperngx/proxy
+                      levels=1:2 keys_zone=hngx_cache:256m
+                      max_size={{ cache_max_size | default('8g') }}
+                      inactive=60m use_temp_path=off;
+
+    ##
+    ## --- Kompresi ---
+    ##
+    gzip                on;
+    gzip_vary           on;
+    gzip_comp_level     5;
+    gzip_min_length     1024;
+    gzip_proxied        any;
+    gzip_types          text/plain text/css text/xml application/json application/javascript
+                        application/xml application/rss+xml image/svg+xml application/wasm;
+    brotli              on;
+    brotli_comp_level   5;
+    brotli_types        text/plain text/css text/xml application/json application/javascript
+                        application/xml image/svg+xml application/wasm;
+
+    ##
+    ## --- TLS global ---
+    ##
+    include /etc/hyperngx/nginx/snippets/ssl-baseline.conf;
+
+    ##
+    ## --- Logging (JSON, buffered, non-blocking) ---
+    ##
+    log_format hyperngx_json escape=json
+      '{"ts":"$time_iso8601","host":"$host","addr":"$remote_addr",'
+      '"method":"$request_method","uri":"$request_uri","status":$status,'
+      '"bytes":$body_bytes_sent,"rt":$request_time,"urt":"$upstream_response_time",'
+      '"ua":"$http_user_agent","ref":"$http_referer","proto":"$server_protocol",'
+      '"tls":"$ssl_protocol","cipher":"$ssl_cipher","upstream":"$upstream_addr",'
+      '"cache":"$upstream_cache_status","reqid":"$request_id"}';
+
+    access_log /var/log/hyperngx/access.log hyperngx_json buffer=512k flush=5s;
+    error_log  /var/log/hyperngx/error.log warn;
+
+    ##
+    ## --- Peta bantu ---
+    ##
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+    map $request_method $is_write_method {
+        default 0;
+        POST 1; PUT 1; PATCH 1; DELETE 1;
+    }
+    include /etc/hyperngx/nginx/snippets/realip.conf;
+
+    ##
+    ## --- Default server: tolak Host yang tidak dikenal ---
+    ## Mencegah host-header attack dan scanning IP langsung.
+    ##
+    server {
+        listen 80  default_server reuseport backlog=65535;
+        listen 443 ssl default_server reuseport backlog=65535;
+        listen [::]:80  default_server reuseport backlog=65535;
+        listen [::]:443 ssl default_server reuseport backlog=65535;
+        # Socket QUIC dibuka di sini walau HTTP/3 mati secara default:
+        # `reuseport` hanya boleh muncul sekali per alamat:port, jadi ia
+        # dideklarasikan di default server, bukan di tiap host.
+        listen 443 quic default_server reuseport;
+        listen [::]:443 quic default_server reuseport;
+        http2 on;
+
+        server_name _;
+        ssl_certificate     /etc/hyperngx/tls/default/fullchain.pem;
+        ssl_certificate_key /etc/hyperngx/tls/default/privkey.pem;
+        ssl_reject_handshake off;
+
+        access_log off;
+        return 444;   # tutup koneksi tanpa respons
+    }
+
+    ##
+    ## --- Konfigurasi terkelola dari HyperNGX ---
+    ##
+    include /etc/hyperngx/nginx/conf.d/*.conf;
+    include /etc/hyperngx/nginx/hosts/*.conf;
+}
+
+stream {
+    log_format hyperngx_stream escape=json
+      '{"ts":"$time_iso8601","addr":"$remote_addr","upstream":"$upstream_addr",'
+      '"bytes_sent":$bytes_sent,"bytes_recv":$bytes_received,"sess":$session_time,'
+      '"status":"$status","sni":"$ssl_preread_server_name"}';
+    access_log /var/log/hyperngx/stream.log hyperngx_stream buffer=256k flush=5s;
+
+    limit_conn_zone $binary_remote_addr zone=stream_perip:16m;
+
+    include /etc/hyperngx/nginx/streams/*.conf;
+}

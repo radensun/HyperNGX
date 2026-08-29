@@ -1,0 +1,25 @@
+[Unit]
+Description=HyperNGX data plane (nginx)
+After=network-online.target hyperngx-supervisor.service
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/run/hyperngx/nginx.pid
+ExecStartPre=/usr/sbin/hyperngx-nginx -t -c /etc/hyperngx/nginx/nginx.conf
+ExecStart=/usr/sbin/hyperngx-nginx -c /etc/hyperngx/nginx/nginx.conf
+ExecReload=/usr/sbin/hyperngx-nginx -t -c /etc/hyperngx/nginx/nginx.conf
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGQUIT
+TimeoutStopSec=30s
+Restart=always
+RestartSec=2s
+
+LimitNOFILE=200000
+OOMScoreAdjust=-800
+CPUAccounting=yes
+IOAccounting=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,79 @@
+/* =====================================================================
+   HyperNGX design tokens — arah visual: "schematic / blueprint teknik".
+   Alasan: produk ini pada dasarnya adalah diagram kabel yang bisa diedit
+   (domain -> TLS -> upstream). UI-nya meminjam bahasa gambar teknik:
+   kertas biru pucat, garis rambut, penomoran jalur, tipografi mono
+   untuk semua data mesin.
+   ===================================================================== */
+:root {
+  /* Warna */
+  --paper:      #EDF1F5;   /* latar kertas biru pucat */
+  --paper-2:    #F7F9FB;   /* permukaan kartu */
+  --ink:        #0F2438;   /* navy tinta, teks utama */
+  --ink-soft:   #5A6E80;   /* teks sekunder */
+  --rule:       #C3D0DC;   /* garis rambut / grid */
+  --live:       #0E7C5A;   /* jalur aktif, sertifikat valid */
+  --signal:     #B26A00;   /* peringatan, sertifikat < 15 hari */
+  --fault:      #B3261E;   /* upstream down, nginx -t gagal */
+  --tls:        #0B6E8C;   /* penanda TLS */
+
+  /* Tipografi */
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-body:    'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+
+  --step--1: 0.8125rem;
+  --step-0:  0.9375rem;
+  --step-1:  1.1875rem;
+  --step-2:  1.5625rem;
+  --step-3:  2.25rem;
+
+  /* Ruang: skala 4px, disiplin */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 40px;
+  --radius: 2px;          /* nyaris kotak: ini gambar teknik, bukan kartu ponsel */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0C1721; --paper-2: #12202C; --ink: #DCE6EF;
+    --ink-soft: #8CA1B4; --rule: #274154;
+    --live: #3FBF92; --signal: #E0A040; --fault: #E06A62; --tls: #4FB6D6;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background:
+    linear-gradient(var(--rule) 1px, transparent 1px) 0 0 / 100% 32px,
+    var(--paper);
+  background-blend-mode: normal;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.015em; margin: 0; }
+h1 { font-size: var(--step-3); }
+h2 { font-size: var(--step-2); }
+
+code, .mono, td.data { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Eyebrow: menandai nomor jalur, bukan dekorasi — angkanya adalah id host
+   yang juga jadi nama berkas hosts/000123.conf di disk. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:focus-visible { outline: 2px solid var(--tls); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

@@ -1,0 +1,17 @@
+# /etc/hyperngx/supervisor.toml
+socket_path      = "/run/hyperngx/supervisor.sock"
+nginx_root       = "/etc/hyperngx/nginx"
+nginx_bin        = "/usr/sbin/hyperngx-nginx"
+template_dir     = "/usr/share/hyperngx/templates"
+tls_dir          = "/etc/hyperngx/tls"
+acme_webroot     = "/var/lib/hyperngx/acme"
+keep_generations = 20
+allowed_peer_user = "hyperngx-api"
+
+[acme]
+# Ganti ke staging saat menguji: rate limit produksi Let's Encrypt
+# adalah 5 kegagalan/jam/akun dan 50 sertifikat/domain/minggu.
+directory            = "https://acme-v02.api.letsencrypt.org/directory"
+contact_email        = "ops@contoh.id"
+check_interval_hours = 12
+ticket_rotate_hours  = 12
